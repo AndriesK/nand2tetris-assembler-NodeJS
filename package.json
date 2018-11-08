@@ -1,0 +1,12 @@
+{
+  "name": "assembler",
+  "version": "1.0.0",
+  "description": "",
+  "main": "assembler.js",
+  "scripts": {
+    "start": "node ./assembler.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
