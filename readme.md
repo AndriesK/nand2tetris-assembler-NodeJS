@@ -3,8 +3,6 @@
 
 This is an assembler for the 16-bit Hack computer built using javascript and NodeJS
 
-___
-
 ## How to use
 
 **> node assembler PATH/TO/FILE/file.asm**
