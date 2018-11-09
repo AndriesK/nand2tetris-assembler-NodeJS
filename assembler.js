@@ -17,7 +17,7 @@ compTable = {
 		'D+1': '011111',
 		'A+1': '110111',
 		'D-1': '001110',
-		'A-1': '001110',
+		'A-1': '110010',
 		'D+A': '000010',
 		'D-A': '010011',
 		'A-D': '000111',
@@ -60,7 +60,7 @@ jumpTable = {
 	'JMP': '111'
 };
 
-var isNumber = new RegExp(/^[^a-z][0-9]*/gi);
+var isNumber = new RegExp(/(^[0-9][0-9]+[0-9]$)|(^[0-9][0-9]+$)|^[0-9]$/gi);
 
 var varDictionary = {
 
@@ -77,7 +77,11 @@ function parseLabels(fileName) {
 	});
 
 	rl.on('line', (line) => {
-		if (typeof line === 'string' && line.length > 1) {
+		line = line.replace(/\s+/g, '');
+		if (line.indexOf('/') > -1) {
+			line = line.substr(0,line.indexOf('/'));
+		}
+		if (typeof line === 'string' && line.length > 1 && /^\/\/*/gi.test(line) === false) {
 			lineNumber++;
 			line = line.substr(line.lastIndexOf(' ')+1, line.length-line.lastIndexOf(' '));
 			findLabel(line);
@@ -85,11 +89,10 @@ function parseLabels(fileName) {
 	});
 
 	function findLabel(line) {
-		if (/^\(([A-Z])+\)$/gi.test(line)) {
+		if (/^\(([A-Z]|[_]|[.]|[$]|[0-9]*)+\)$/gi.test(line)) {
 			labelCount += 1;
 			line = line.substr(1,line.length-2);
 			varDictionary[line] = lineNumber - labelCount;
-			console.log(line, varDictionary[line]);
 		}
 	}
 
@@ -120,16 +123,18 @@ function Assembler(fileName) {
 	});
 
 	rl.on('line', (line) => {
-		line = line.substr(line.lastIndexOf(' ')+1, line.length-line.lastIndexOf(' '));
-		if (typeof line === 'string' && line.length > 0 && /^\(([A-Z])+\)$/gi.test(line) === false) {
+		//line = line.substr(line.lastIndexOf(' ')+1, line.length-line.lastIndexOf(' '));
+		line = line.replace(/\s+/g, '');
+		if (line.indexOf('/') > -1) {
+			line = line.substr(0,line.indexOf('/'));
+		}
+		if (typeof line === 'string' && line.length > 1 && /^\(([A-Z]|[_]|[.]|[$]|[0-9]*)+\)$/gi.test(line) === false && /^(\/\/).*/gi.test(line) === false) {
 			lineNumber++;
 			interpretLine(line);
 		}
 	});
 
 	rl.on('close', () => {
-		// console.log(varDictionary);
-		// console.log(C_And_A_Instruction_Array_String);
 		writeAssembly(C_And_A_Instruction_Array_String);
 	});
 
@@ -142,10 +147,31 @@ function Assembler(fileName) {
 			*/
 			var lineVar = '';
 			lineVar = line.substr(1,line.length-1);
-			if (isNumber.test(lineVar) === true) {
-				var address = null;
+			//console.log(lineVar, varDictionary[lineVar]);
+			//lineVar = lineVar.toUpperCase();
+			if (isNumber.test(lineVar) === true || lineVar === 'SP' || lineVar === 'LCL' || lineVar === 'ARG' || lineVar === 'THAT' || lineVar === 'THIS') {
+				var address;
+				if (isNumber.test(lineVar)) {
+					lineVar = `'${lineVar}'`;
+				}
+				else if (lineVar === 'SP') {
+					lineVar = '0';
+				}
+				else if (lineVar === 'LCL') {
+					lineVar = '1';
+				}
+				else if (lineVar === 'ARG') {
+					lineVar = '2';
+				}
+				else if (lineVar === 'THIS') {
+					lineVar = '3'
+				}
+				else if (lineVar === 'THAT') {
+					lineVar = '4';
+				}
 				try {
 					address = parseInt(lineVar);
+					console.log(lineVar);
 				/* Hack Computer is a 16-bit computer using 2's complement
 					* As such, only 2^15-1 amount of 16-bit registers exist,
 					* 0-16K for programs
@@ -158,23 +184,25 @@ function Assembler(fileName) {
 					* map. Access to address 0x6000 results in accessing the keyboard 
 					* memory map
 				*/
-					if (address > 24576) {
-						throw new Error('Address out of bounds');
-					}
+					//if (address > 24576) {
+					//	let err = new Error();
+					//	err = 'Address out of bounds: ' + ' Line: ' + lineVar + ' Address: ' + address;
+					//	throw err;
+					//}
+					
 					//console.log('Address before bin:', address);
 					address = address.toString(2);
 					//console.log('Address after bin:', address);
 					while (address.length < 16) {
 						address = '0' + address;
 					}
-					//console.log('Address after padding 0\'s:', address);
 					C_And_A_Instruction_Array_String.push(address);
 				}
 				catch(error) {
 					console.log(error);
 				}
-			}	
-			else if (/^([a-z]*)[a-z]$/gi.test(lineVar)) {
+			}
+			if (/^(_|[a-z])([a-z]|_)+/gi.test(lineVar) === true) {
 				if (!varDictionary[lineVar]) {
 					if (lineVar.toUpperCase() === 'KBD') {
 						let temp = 24576;
@@ -193,28 +221,19 @@ function Assembler(fileName) {
 						C_And_A_Instruction_Array_String.push(temp)
 					}
 					else {
-						//console.log(lineVar);
 						varDictionary[lineVar] = i;
 						let temp = i;
-						temp = temp.toString(2)
+						temp = temp.toString(2);
 						while (temp.length < 16) {
 							temp = '0' + temp;
 						}
-						C_And_A_Instruction_Array_String.push(temp)
+						C_And_A_Instruction_Array_String.push(temp);
 						i++;
 					}
 				}
 				else if (varDictionary[lineVar]) {
-					// varDictionary[lineVar] = i;
-					// 	let temp = i;
-					// 	temp = temp.toString(2)
-					// 	while (temp.length < 16) {
-					// 		temp = '0' + temp;
-					// 	}
-					// 	C_And_A_Instruction_Array_String.push(temp)
-					// 	i++;
-					//console.log(lineVar, varDictionary[lineVar]);
 					let temp = varDictionary[lineVar];
+					temp = parseInt(temp);
 					temp = temp.toString(2);
 					while (temp.length < 16) {
 						temp = '0' + temp;
@@ -222,30 +241,17 @@ function Assembler(fileName) {
 					C_And_A_Instruction_Array_String.push(temp);
 				}
 			}
-			else if (/R[0-9]/gi.test(lineVar)) {
-				varDictionary[lineVar] = j;
-				if (!varDictionary[lineVar]) {
-					let temp = j;
-					temp = temp.toString(2)
-					while (temp.length < 16) {
-						temp = '0' + temp;
-					}
-					C_And_A_Instruction_Array_String.push(temp)
+			else if (/^R[0-9]$|(^R[0-9][0-5]+$)/gi.test(lineVar) === true) {
+				let temp = lineVar;
+				temp = temp.substr(1,temp.length-1);
+				temp = parseInt(temp);
+				temp = temp.toString(2);
+				while (temp.length < 16) {
+					temp = '0' + temp;
 				}
-				j++
+				C_And_A_Instruction_Array_String.push(temp)
 			} 
 		}
-		// else if (/^\(([A-Z])+\)$/gi.test(line)) {
-		// 	line = line.substr(1,line.length-2);
-		// 	if (!varDictionary[line]) {
-		// 		varDictionary[line] = lineNumber+1;
-		// 		let temp = lineNumber;
-		// 		temp = temp.toString(2)
-		// 		while (temp.length < 16) {
-		// 			temp = '0' + temp;
-		// 		}
-		// 	}
-		// }
 		else if (/^[a-z]|0[a-z]?[a-z]?/gi.test(line)) {
 			/* How to deal with C-Instruction parts 
 				* MD=D+1;JMP                                                           // Example C-Instruction
@@ -269,38 +275,40 @@ function Assembler(fileName) {
 				***************
 			*/
 			if (line.indexOf('=') > -1) {
-				let temp = line;
-				let part1 = temp.substr(0,temp.indexOf('='));
-				temp = temp.substr(temp.indexOf('=')+1, temp.length-part1.length+1);
-				let part2;
-				let part3 = null;
-				if (temp.indexOf(';') > -1) {
-					part2 = temp.substr(0, temp.indexOf(';'));
-					temp = temp.substr(temp.indexOf(';')+1, temp.length-part2.length+1);
-					part3 = temp;
-				}
-				else {
-					part2 = temp.substr(0, temp.length);
-				}
-				const compRegExp = new RegExp(/^(0|!|-|A|M|D)+|((\+|-|&|!|\|)(?=|1|A|M|D)(1|A|M|D))$/);
-				const compOperator = compRegExp.exec(temp);
-				if (compRegExp.test(part2)) {
+				const compRegExp = new RegExp(/^[AMD]+=[AMD01&(-1)(!A|!M|!D|!1)]+$|^[AMD]+=[AMD01]+[-+][AMD01]+/);
+				//console.log(line);
+				if (compRegExp.test(line)) {
+					let temp = line;
+					let part1 = temp.substr(0,temp.indexOf('='));
+					temp = temp.substr(temp.indexOf('=')+1, temp.length-part1.length+1);
+					let part2;
+					let part3 = null;
+					if (temp.indexOf(';') > -1) {
+						part2 = temp.substr(0, temp.indexOf(';'));
+						temp = temp.substr(temp.indexOf(';')+1, temp.length-part2.length+1);
+						part3 = temp;
+					}
+					else {
+						part2 = temp.substr(0, temp.length);
+					}
 					define_C_Instruction(part1, part2, part3);
 				}
 				else {
-					throw new Error('not valid comp');
+					let error = new Error();
+					error = 'not valid comp';
+					throw error;
 				}
 			}
 			else {
 				let temp = line;
 				if (temp.indexOf(';') < 0) {
-					throw new Error('Invalid C-Instruction');
+					let error = new Error();
+					error = 'invalid C-Instruction at: ' + lineNumber + ' line: ' + line;
+					throw error;
 				}
 				let part2 = temp.substr(0, temp.indexOf(';'));
 				temp = temp.substr(temp.indexOf(';')+1, temp.length-temp.indexOf(';'));
 				let part3 = temp;
-				console.log(part2);
-				console.log(part3);
 				define_C_Instruction(null, part2, part3);
 			}
 		}
@@ -330,11 +338,13 @@ function Assembler(fileName) {
 		else {
 			computationString += jumpTable['null'];
 		}
-
 		C_And_A_Instruction_Array_String.push(computationString);
 	}
 
 	function writeAssembly(array) {
+		if (fs.existsSync(fileName.substr(0,fileName.indexOf('.')) + '.hack')) {
+			fs.unlinkSync(fileName.substr(0,fileName.indexOf('.')) + '.hack');
+		}
 		for (var l = 0; l < array.length; l++) {
 			fs.appendFileSync(fileName.substr(0,fileName.indexOf('.')) + '.hack',array[l] + "\n");
 		}
